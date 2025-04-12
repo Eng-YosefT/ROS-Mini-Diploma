@@ -1,0 +1,121 @@
+
+
+الفكرة الأساسية: بناء برنامج ROS 2 (Node)
+
+الهدف هو عمل برنامجين (أو أكتر) يقدروا يكلموا بعض باستخدام ROS 2. البرامج دي بنسميها Nodes (عُقد). المثال بتاعك (publisher و subscriber) هو أبسط شكل للتواصل ده.
+
+1. تهيئة وإدارة الـ Node (العُقدة):
+
+دي أهم خطوة عشان برنامجك يبقى "Node" في نظام ROS.
+
+#include <rclcpp/rclcpp.hpp>: ده السطر الأساسي اللي بيخليك تستخدم مكتبة ROS 2 للـ C++. من غيره، مفيش ROS.
+
+class MyNode : public rclcpp::Node: عشان تعمل Node، لازم تعمل Class يرث (inherits) من rclcpp::Node. ده بيديك كل وظائف الـ Node الأساسية.
+
+MyNode() : Node("node_name"): جوه الـ Constructor بتاع الكلاس بتاعك، لازم تستدعي الـ Constructor بتاع الأب (rclcpp::Node) وتديله اسم للـ Node بتاعتك (مثلاً "my_publisher" أو "Listener"). الاسم ده مهم عشان تعرف تتعامل مع الـ Node دي بعدين بأوامر ROS.
+
+rclcpp::init(argc, argv); (في main): دي أول وأهم خطوة في أي برنامج ROS 2. هي اللي بتبدأ نظام ROS وتخليه جاهز للشغل. لازم تتكتب أول حاجة في الـ main.
+
+rclcpp::spin(std::make_shared<MyNode>()); (في main): دي بتخلي الـ Node بتاعتك "تلف" وتفضل شغالة ومستنية شغل يحصل (زي وصول رسالة أو معاد تايمر ييجي). من غير spin, الـ Node هتبدأ وتقفل على طول ومش هتعمل حاجة مفيدة (زي استقبال رسايل أو تنفيذ callbacks). هي بتستنى لحد ما توقفها (مثلاً بـ Ctrl+C).
+
+rclcpp::shutdown(); (في main): دي بتنضف وبتقفل كل حاجة تبع ROS 2 بشكل سليم لما الـ spin يقف.
+
+2. التواصل (Publish/Subscribe Model):
+
+الـ Nodes بتتكلم مع بعض عن طريق الـ Topics. واحد بيبعت (Publisher) والتاني بيستقبل (Subscriber).
+
+#include <std_msgs/msg/string.hpp>: لازم تعمل include لنوع الرسالة اللي هتستخدمها. هنا استخدمنا رسالة نصية بسيطة String من مكتبة الرسائل القياسية std_msgs.
+
+إنشاء Publisher:
+
+publisher = this->create_publisher<std_msgs::msg::String>("topic", 10);
+
+create_publisher: دي الفانكشن اللي بتعمل publisher.
+
+<std_msgs::msg::String>: بتحدد نوع الرسالة اللي هيبعتها.
+
+"topic": ده اسم الـ Topic (القناة) اللي هيبعت عليها. لازم الـ Subscriber يستخدم نفس الاسم ونفس نوع الرسالة.
+
+10: ده حجم الـ Queue (طابور الانتظار) أو الـ Quality of Service (QoS). ببساطة، لو الـ publisher بيبعت أسرع من الشبكة أو الـ subscriber، ممكن يخزن لحد 10 رسايل مؤقتًا.
+
+إرسال رسالة (Publish):
+
+auto message = std_msgs::msg::String(); : بتجهز رسالة فاضية من النوع المطلوب.
+
+message.data = "hello";: بتحط البيانات جوه الرسالة.
+
+publisher->publish(message);: بتبعت الرسالة فعلاً على الـ Topic.
+
+إنشاء Subscriber:
+
+subscriber = this->create_subscription<std_msgs::msg::String>("topic", 10, std::bind(&MySubscriber::callback_function, this, _1));
+
+create_subscription: دي الفانكشن اللي بتعمل subscriber.
+
+<std_msgs::msg::String> و "topic" و 10: نفس معنى اللي في الـ publisher (نوع الرسالة، اسم الـ Topic، والـ QoS). لازم يطابقوا الـ Publisher عشان يستقبل منه.
+
+std::bind(&MySubscriber::callback_function, this, _1): دي أهم حتة في الـ Subscriber. بتربط فانكشن معينة (اسمها هنا callback_function) بالـ Subscriber. كل ما رسالة توصل على الـ Topic ده، ROS هينده الفانكشن دي أوتوماتيك ويبعتلها الرسالة اللي وصلت (_1 ده بيمثل الرسالة اللي جاية).
+
+استقبال الرسالة (Callback Function):
+
+void callback_function(const std_msgs::msg::String::SharedPtr msg) const
+
+دي الفانكشن اللي بتتنفذ لما رسالة توصل.
+
+const std_msgs::msg::String::SharedPtr msg: الـ Argument ده هو الرسالة اللي وصلت. تقدر توصل للداتا اللي جواها عن طريق msg->data.
+
+3. المؤقت (Timer):
+
+طريقة عشان تخلي الـ Node تعمل حاجة بشكل دوري (كل فترة زمنية معينة).
+
+timer = this->create_wall_timer(500ms, std::bind(&MyPublisher::callback_function, this));
+
+create_wall_timer: بينشئ تايمر.
+
+500ms: المدة الزمنية اللي هيتكرر فيها (هنا كل 500 ميلي ثانية).
+
+std::bind(&MyPublisher::callback_function, this): بيربط فانكشن معينة (اسمها هنا callback_function) بالتايمر. ROS هينده الفانكشن دي كل 500ms.
+
+void callback_function(): دي الفانكشن اللي التايمر بينده عليها. مش بتاخد arguments في الحالة دي.
+
+4. بناء الباكدج (CMakeLists.txt و package.xml):
+
+الملفين دول بيقولوا لأداة البناء (colcon) إزاي تبني الكود بتاعك وإيه المكتبات اللي بيعتمد عليها.
+
+package.xml:
+
+<depend>rclcpp</depend> و <depend>std_msgs</depend>: بتعلن إن الباكدج دي محتاجة المكتبتين دول عشان تشتغل وتتبني.
+
+<buildtool_depend>ament_cmake</buildtool_depend>: بتحدد إننا بنستخدم نظام البناء ament_cmake.
+
+CMakeLists.txt:
+
+find_package(rclcpp REQUIRED) و find_package(std_msgs REQUIRED): بتخلي CMake يدور على المكتبات دي عشان يقدر يستخدمها.
+
+add_executable(talker src/publisher.cpp): بتقول لـ CMake يعمل ملف تنفيذي (برنامج) اسمه talker من ملف الكود publisher.cpp.
+
+ament_target_dependencies(talker rclcpp std_msgs): بتربط الملف التنفيذي talker بالمكتبات اللي بيستخدمها (rclcpp و std_msgs). من غير السطر ده، البرنامج مش هيشتغل وهيقول إنه مش لاقي الفانكشنز بتاعة ROS.
+
+install(TARGETS talker listener DESTINATION lib/${PROJECT_NAME}): بتقول لـ colcon يحط الملفات التنفيذية فين بعد البناء، عشان الأمر ros2 run يقدر يلاقيهم ويشغلهم.
+
+5. أوامر التشغيل الأساسية:
+
+colcon build: الأمر اللي بيبني كل الباكدجات في الـ workspace بتاعك باستخدام المعلومات اللي في CMakeLists.txt و package.xml.
+
+source install/setup.bash: مهم جداً! بعد ما تبني، لازم تنفذ الأمر ده عشان الـ terminal يعرف مكان الملفات التنفيذية والمكتبات الجديدة اللي colcon بناها. لازم تعمله في كل terminal جديد هتستخدم فيه الـ nodes بتاعتك.
+
+ros2 run <package_name> <executable_name>: الأمر اللي بيشغل node معينة (ملف تنفيذي) من باكدج معينة (مثال: ros2 run cpp_pubsub talker).
+
+باختصار، أهم الخطوات لعمل Node بسيطة هي:
+
+اعمل include للمكتبات اللازمة (rclcpp ونوع الرسالة).
+
+اعمل Class يرث من rclcpp::Node وسمّي الـ Node في الـ constructor.
+
+في الـ main: اعمل rclcpp::init, اعمل std::make_shared للـ Node بتاعتك، وشغلها بـ rclcpp::spin, وأخيراً rclcpp::shutdown.
+
+جوه الـ Node Class: استخدم create_publisher, create_subscription, أو create_wall_timer حسب احتياجك، واربطهم بـ callback functions مناسبة.
+
+عرف الـ dependencies والـ executables في package.xml و CMakeLists.txt.
+
+ابني بـ colcon build, اعمل source install/setup.bash, وشغل بـ ros2 run.
